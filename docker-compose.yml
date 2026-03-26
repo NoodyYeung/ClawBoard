@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: clawboard
+      POSTGRES_USER: clawboard
+      POSTGRES_PASSWORD: clawboard
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clawboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    ports:
+      - "8100:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://clawboard:clawboard@db:5432/clawboard
+      OPENCLAW_CRON_PATH: /openclaw-cron/jobs.json
+      CLAUDE_PROJECTS_PATH: /projects
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GOOGLE_APP_PASSWORD: ${GOOGLE_APP_PASSWORD:-}
+      CLAUDE_SESSIONS_PATH: /claude-sessions
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ${HOME}/.openclaw/cron:/openclaw-cron:ro
+      - ../../ClaudeCodeProject:/projects
+      - ${HOME}/.claude/projects:/claude-sessions:ro
+      - ${HOME}/Projects/Moltbot_ClaudeCode/data:/data
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5174:5173"
+    depends_on:
+      - api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  pgdata:
